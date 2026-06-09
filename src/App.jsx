@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-import { Train } from 'lucide-react';
+// import { Train } from 'lucide-react'; // Removed unused icon
 import Home from './pages/Home';
 import Results from './pages/Results';
 import './index.css';
@@ -16,7 +16,7 @@ function App() {
       <div className="app-container">
         <header className="app-header">
           <Link to="/" className="logo">
-            <Train size={28} color="#60a5fa" />
+            <img src="/logo.png" alt="Rail Compass Logo" style={{ width: '36px', height: '36px', marginRight: '4px' }} />
             RAIL COMPASS
           </Link>
           <nav>
