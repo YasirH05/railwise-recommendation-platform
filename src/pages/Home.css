@@ -215,3 +215,27 @@
   50% { transform: translateY(20px); }
   100% { transform: translateY(0px); }
 }
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .hero-content h1 {
+    font-size: 2.8rem;
+  }
+  
+  .hero-section {
+    margin-top: -50px;
+  }
+  
+  .section-title {
+    font-size: 2rem;
+  }
+  
+  .subtitle {
+    font-size: 1rem;
+  }
+  
+  .glow-orb.orb-1, .glow-orb.orb-2 {
+    width: 250px;
+    height: 250px;
+  }
+}
