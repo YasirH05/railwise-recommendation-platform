@@ -5,6 +5,45 @@ import { SlidersHorizontal, Loader2 } from 'lucide-react';
 import TrainCard from '../components/TrainCard';
 import './Results.css';
 
+const RAILWAY_FACTS = [
+  "The Lucknow-New Delhi AC Superfast was originally a Rajdhani Express, but was downgraded because the route was too short for a mandatory pantry car.",
+  "If you visit the Navapur Railway Station, you can literally stand with one foot in Maharashtra and the other in Gujarat. The state border runs directly through the middle of the station.",
+  "The Chenab Bridge in Jammu & Kashmir is the world's highest rail bridge, towering 359 meters above the river—taller than the Eiffel Tower!",
+  "India's slowest train, the Mettupalayam-Ooty Nilgiri Passenger, chugs along at a leisurely 10 km/h—so slow you can easily run alongside it.",
+  "The Howrah-Amritsar Express holds the record for the most stops on a single route, halting at an exhausting 115 stations.",
+  "Indian Railways' official mascot is 'Bholu', a friendly elephant dressed as a railway guard holding a green signal lamp.",
+  "The Vivek Express travels a grueling 4,234 km over 82 hours without changing trains, making it the longest rail route in India.",
+  "Gorakhpur Railway Station in Uttar Pradesh boasts the world's longest railway platform, stretching over 1.3 kilometers.",
+  "The majestic Pir Panjal Railway Tunnel in the Himalayas is 11.2 km long—India's longest transportation tunnel."
+];
+
+function LoadingFacts() {
+  const [factIndex, setFactIndex] = useState(0);
+
+  const nextFact = () => {
+    setFactIndex((prev) => (prev + 1) % RAILWAY_FACTS.length);
+  };
+
+  return (
+    <div className="glass-panel loading-facts animate-fade-in" style={{ padding: '3rem 2rem', textAlign: 'center', maxWidth: '600px', margin: '2rem auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
+      <Loader2 className="spinner" size={48} style={{ color: 'var(--primary)' }} />
+      <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.25rem', lineHeight: '1.4' }}>
+        We'll have your perfect journey ready in just a moment... <br/>
+        <span style={{ color: 'var(--text-muted)', fontSize: '1rem', fontWeight: 'normal' }}>Meanwhile, did you know?</span>
+      </h3>
+      
+      <div style={{ padding: '1.5rem', background: 'rgba(79, 70, 229, 0.1)', borderRadius: '12px', border: '1px solid rgba(79, 70, 229, 0.2)', minHeight: '120px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ fontSize: '1.1rem', fontStyle: 'italic', margin: 0, lineHeight: 1.5, color: '#e2e8f0' }}>"{RAILWAY_FACTS[factIndex]}"</p>
+      </div>
+      
+      <button onClick={nextFact} className="btn-secondary" style={{ padding: '8px 16px', fontSize: '0.9rem' }}>
+        Another fact?
+      </button>
+    </div>
+  );
+}
+
+
 export default function Results() {
   const [searchParams] = useSearchParams();
   const origin = searchParams.get('origin') || 'New Delhi';
@@ -48,7 +87,7 @@ export default function Results() {
           const res = await axios.get(`${API_URL}/api/trains?${queryParams}`);
           setTrains(res.data);
           setLoading(false);
-        }, 800);
+        }, 4000);
       } catch (error) {
         console.error('Error fetching trains:', error);
         setLoading(false);
@@ -59,7 +98,12 @@ export default function Results() {
   }, [origin, destination, date, weightDuration, weightDaytime, weightBudget, weightReliability, weightComfort, weightFood, preferredClass]);
 
   return (
-    <div className="page-container animate-fade-in">
+    <>
+      {/* Static Image Background */}
+      <div className="image-background"></div>
+      <div className="video-overlay"></div>
+
+      <div className="page-container animate-fade-in" style={{ background: 'transparent' }}>
       <div className="results-header">
         <div>
           <h2 className="route-title">{origin} to {destination}</h2>
@@ -70,6 +114,15 @@ export default function Results() {
           <SlidersHorizontal size={18} />
           RailPilot Settings
         </button>
+      </div>
+
+      {/* Weather Banner */}
+      <div className="weather-banner glass-panel" style={{ margin: '0 0 2rem 0', padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', background: 'linear-gradient(to right, rgba(14, 165, 233, 0.1), rgba(79, 70, 229, 0.1))' }}>
+        <span style={{ fontSize: '1.5rem' }}>🌤️</span>
+        <div>
+          <h4 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-main)' }}>Expected Weather in {destination}</h4>
+          <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>28°C, Partly Cloudy. Pack light!</p>
+        </div>
       </div>
 
       <div className="results-layout">
@@ -131,10 +184,7 @@ export default function Results() {
 
         <div className="trains-list">
           {loading ? (
-            <div className="loading-state" style={{ height: '300px' }}>
-              <Loader2 className="spinner" size={48} />
-              <h2>Recalculating RailPilot Scores...</h2>
-            </div>
+            <LoadingFacts />
           ) : (
             <>
               {trains.map((train, index) => (
@@ -150,5 +200,6 @@ export default function Results() {
         </div>
       </div>
     </div>
+    </>
   );
 }

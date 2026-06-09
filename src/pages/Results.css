@@ -95,8 +95,34 @@
 }
 
 .empty-state {
-  padding: 60px 20px;
+  padding: 4rem 2rem;
   text-align: center;
+  color: var(--text-muted);
+}
+
+/* Image Background */
+.image-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -2;
+  background-image: url('/charbagh-bg.png');
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
+}
+
+.video-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.65); /* Dark overlay to make text readable but show sun rays */
+  z-index: -1;
+  pointer-events: none;
 }
 
 @media (max-width: 900px) {

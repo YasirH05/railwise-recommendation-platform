@@ -44,10 +44,15 @@ export default function TrainCard({ train, rank, preferredClass }) {
             <span className="time">{train.departureTime}</span>
             <span className="station">{train.departureStation}</span>
           </div>
-          <div className="duration-line">
-            <Clock size={14} />
-            <span>{train.duration}</span>
-            <div className="line"></div>
+          <div className="duration-line" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, padding: '0 1rem' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>{train.duration}</span>
+            <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '8px' }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', border: '2px solid var(--primary)', background: 'transparent' }}></div>
+              <div style={{ flex: 1, height: '2px', background: 'linear-gradient(90deg, var(--primary) 0%, transparent 100%)', position: 'relative' }}>
+                <span style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem' }}>🚂</span>
+              </div>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)' }}></div>
+            </div>
           </div>
           <div className="time-station text-right">
             <span className="time">{train.arrivalTime}</span>
@@ -65,7 +70,22 @@ export default function TrainCard({ train, rank, preferredClass }) {
             ))}
           </div>
           <div className="seats mt-2 text-right">
-            {train.availableSeats} seats left
+            {train.availableSeats > 50 ? (
+              <span style={{ color: '#22c55e', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e' }}></div>
+                Available ({train.availableSeats})
+              </span>
+            ) : train.availableSeats > 0 ? (
+              <span style={{ color: '#eab308', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#eab308' }}></div>
+                RAC ({train.availableSeats})
+              </span>
+            ) : (
+              <span style={{ color: '#ef4444', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }}></div>
+                Waitlisted (WL{Math.floor(Math.random() * 50) + 1})
+              </span>
+            )}
           </div>
         </div>
       </div>
