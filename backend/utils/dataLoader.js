@@ -1,11 +1,22 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import zlib from 'zlib';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DATA_DIR = path.join(__dirname, '../data');
+
+// Helper to load either .json or .json.gz
+const loadJSONFile = (filename) => {
+  const gzPath = path.join(DATA_DIR, filename + '.gz');
+  if (fs.existsSync(gzPath)) {
+    return JSON.parse(zlib.gunzipSync(fs.readFileSync(gzPath)).toString('utf8'));
+  }
+  const jsonPath = path.join(DATA_DIR, filename);
+  return JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+};
 
 // In-memory indices
 export let stationsList = [];
@@ -21,7 +32,7 @@ export const initData = () => {
   console.log('⏳ Loading Railway Data into Memory... This might take a few seconds.');
   try {
     // 1. Load Stations
-    const stationsData = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'stations.json'), 'utf8'));
+    const stationsData = loadJSONFile('stations.json');
     stationsData.features.forEach(f => {
       const props = f.properties;
       if (props.code) {
@@ -34,7 +45,7 @@ export const initData = () => {
     console.log(`✅ Loaded ${stationsList.length} stations.`);
 
     // 2. Load Trains
-    const trainsData = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'trains.json'), 'utf8'));
+    const trainsData = loadJSONFile('trains.json');
     trainsData.features.forEach(f => {
       const props = f.properties;
       if (props.number) {
@@ -44,7 +55,7 @@ export const initData = () => {
     console.log(`✅ Loaded ${Object.keys(trainsMap).length} trains.`);
 
     // 3. Load Schedules
-    const schedulesData = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'schedules.json'), 'utf8'));
+    const schedulesData = loadJSONFile('schedules.json');
     
     // Group schedules by train number
     schedulesData.forEach(stop => {
