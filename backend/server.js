@@ -4,11 +4,15 @@ import cors from 'cors';
 import mongoose from 'mongoose';
 import trainRoutes from './routes/trainRoutes.js';
 import stationRoutes from './routes/stationRoutes.js';
+import { initData } from './utils/dataLoader.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Initialize data loader for Kaggle dataset
+initData();
 
 app.use(cors());
 app.use(express.json());

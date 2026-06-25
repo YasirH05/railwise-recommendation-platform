@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, BrainCircuit, ShieldCheck, Map } from 'lucide-react';
 import SearchWidget from '../components/SearchWidget';
+import FAQSection from '../components/FAQSection';
 import './Home.css';
 
 export default function Home() {
@@ -25,7 +26,7 @@ export default function Home() {
     <div className="home-container animate-fade-in" style={{ display: 'block' }}>
       <div className="hero-section" style={{ margin: '0 auto', paddingTop: '100px', paddingBottom: '100px', minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div className="hero-content">
-          <div className="badge">✨ AI-Powered Recommendations</div>
+          <div className="badge">✨ Smart & Personalized Recommendations</div>
           <h1>
             Find the <span className="highlight-text">Perfect Train</span><br />
             for your Journey
@@ -52,7 +53,7 @@ export default function Home() {
             <div className="feature-icon-wrapper">
               <BrainCircuit size={32} />
             </div>
-            <h3>AI Analysis</h3>
+            <h3>Smart Analysis</h3>
             <p className="text-muted text-sm">Our algorithm weighs duration, budget, comfort, and reliability based on your unique needs.</p>
           </div>
           <div className="feature-card glass-panel">
@@ -119,6 +120,8 @@ export default function Home() {
 
         </div>
       </div>
+
+      <FAQSection />
 
       {/* Decorative background elements */}
       <div className="glow-orb orb-1"></div>

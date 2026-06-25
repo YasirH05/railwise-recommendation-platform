@@ -1,378 +1,211 @@
-import Train from '../models/Train.js';
-import axios from 'axios';
+import {
+  stationsList,
+  stationsMap,
+  trainsMap,
+  schedulesByTrain,
+  stationToTrains,
+  getStationCodes
+} from '../utils/dataLoader.js';
+import { rankTrains } from '../utils/smartScore.js';
 
-const CITY_TO_STATION = {
-  'new delhi': 'NDLS',
-  'lucknow': 'LKO',
-  'mumbai': 'BCT',
-  'bangalore': 'SBC',
-  'chennai': 'MAS',
-  'kolkata': 'HWH',
-  'hyderabad': 'SC',
-  'ahmedabad': 'ADI',
-  'pune': 'PUNE',
-  'jaipur': 'JP',
-  'goa': 'MAO',
-  'kochi': 'ERS',
-  'amritsar': 'ASR',
-  'guwahati': 'GHY',
-  'bhubaneswar': 'BBS',
-  'kanpur': 'CNB',
-  'nagpur': 'NGP',
-  'indore': 'INDB',
-  'patna': 'PNBE',
-  'bhopal': 'BPL',
-  'agra': 'AGC',
-  'varanasi': 'BSB',
-  'chandigarh': 'CDG'
+// Helper to convert time string "HH:MM:SS" to minutes
+const timeToMins = (timeStr) => {
+  if (!timeStr || timeStr === 'None') return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  return (h * 60) + m;
 };
 
-// Helper to generate metrics based on train type
-const generateSmartMetrics = (type, isDedicated) => {
-  const base = {
-    'Shatabdi': { rel: 9.2, comf: 8.5, food: 8.0 },
-    'Rajdhani': { rel: 9.5, comf: 9.0, food: 8.5 },
-    'Tejas': { rel: 9.0, comf: 9.5, food: 9.0 },
-    'Superfast': { rel: 8.8, comf: 8.8, food: 7.0 },
-    'Mail': { rel: 8.8, comf: 8.8, food: 7.0 },
-    'Express': { rel: 7.5, comf: 8.2, food: 6.0 }
-  };
+// Calculate total duration in minutes
+const calculateDurationMins = (startDay, startTime, endDay, endTime) => {
+  const sDay = startDay || 1;
+  const eDay = endDay || 1;
+  const sTime = timeToMins(startTime);
+  const eTime = timeToMins(endTime);
+
+  let totalMins = (eDay - sDay) * 24 * 60;
+  totalMins += (eTime - sTime);
   
-  const stats = base[type] || base['Express'];
-  
-  let finalRel = stats.rel;
-  if (isDedicated) {
-    finalRel = Math.min(9.8, finalRel + 1.2); 
-  }
-  
-  return {
-    reliabilityRating: Number(finalRel.toFixed(1)),
-    comfortRating: stats.comf,
-    foodRating: stats.food
-  };
-};
-// Helper to convert "6h 30m" to total minutes
-const parseDuration = (durStr) => {
-  const match = durStr.match(/(\d+)h\s*(\d+)m/);
-  if (!match) return 0;
-  return parseInt(match[1]) * 60 + parseInt(match[2]);
+  return totalMins > 0 ? totalMins : 0;
 };
 
-// Helper to calculate daytime hours (08:00 to 20:00) consumed
-const calculateDaytimeHours = (depStr, arrStr, durationMins) => {
-  // Parsing "HH:MM"
-  const parseTime = (t) => {
-    const [h, m] = t.split(':').map(Number);
-    return h + m / 60;
-  };
-  
-  let dep = parseTime(depStr);
-  let arr = parseTime(arrStr);
-  
-  // If arrival is next day (arr < dep), we add 24 to arr
-  if (arr < dep) arr += 24;
-  
+// Calculate daytime hours (08:00 to 20:00) consumed
+const calculateDaytimeHours = (startDay, startTime, endDay, endTime) => {
+  const sDay = startDay || 1;
+  const eDay = endDay || 1;
+  const sTimeHour = timeToMins(startTime) / 60;
+  const eTimeHour = timeToMins(endTime) / 60;
+
+  const dep = ((sDay - 1) * 24) + sTimeHour;
+  const arr = ((eDay - 1) * 24) + eTimeHour;
+
   let daytimeHours = 0;
-  const startDay = 8; // 8 AM
-  const endDay = 20; // 8 PM
-  
-  // A train can run from day 1 into day 2. We check overlaps.
-  // Day 1 Daytime: 8 to 20
-  // Day 2 Daytime: 32 to 44 (8+24 to 20+24)
-  
-  const checkOverlap = (s1, e1, s2, e2) => {
-    const start = Math.max(s1, s2);
-    const end = Math.min(e1, e2);
-    return start < end ? end - start : 0;
-  };
-  
-  daytimeHours += checkOverlap(dep, arr, startDay, endDay);
-  daytimeHours += checkOverlap(dep, arr, startDay + 24, endDay + 24);
-  
+  // Check overlapping with every possible day
+  for (let d = 0; d <= Math.max(sDay, eDay) + 1; d++) {
+    const startDayTime = (d * 24) + 8; // 8 AM
+    const endDayTime = (d * 24) + 20; // 8 PM
+    
+    const overlapStart = Math.max(dep, startDayTime);
+    const overlapEnd = Math.min(arr, endDayTime);
+    
+    if (overlapStart < overlapEnd) {
+      daytimeHours += (overlapEnd - overlapStart);
+    }
+  }
   return daytimeHours;
 };
 
-const apiCache = {}; // In-memory cache to prevent RapidAPI rate limits
+const formatDuration = (mins) => {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h}h ${m}m`;
+};
+
+const getDummyPrices = (durationMins, type) => {
+  const hours = durationMins / 60;
+  // A standard Express train base fare: ~45 INR per hour for Sleeper.
+  let baseSleeper = Math.max(120, Math.floor(hours * 45)); 
+  
+  let prices = {};
+  
+  if (type === 'Rajdhani' || type === 'Shatabdi' || type === 'Vande Bharat' || type === 'Tejas') {
+    // Premium trains don't have Sleeper class usually.
+    if (type === 'Shatabdi' || type === 'Vande Bharat' || type === 'Tejas') {
+      prices['CC'] = Math.floor(hours * 130);
+      prices['EC'] = Math.floor(hours * 250);
+    } else if (type === 'Rajdhani') {
+      prices['3AC'] = Math.floor(hours * 140);
+      prices['2AC'] = Math.floor(hours * 200);
+      prices['1AC'] = Math.floor(hours * 320);
+    }
+  } else {
+    // Standard Express, Superfast, Mail
+    let mult = type === 'Superfast' ? 1.15 : 1.0;
+    if (type === 'Pass' || type === 'MEMU') mult = 0.5;
+
+    prices['SL'] = Math.floor(baseSleeper * mult);
+    prices['3AC'] = Math.floor(baseSleeper * 2.6 * mult);
+    prices['2AC'] = Math.floor(baseSleeper * 3.8 * mult);
+    prices['1AC'] = Math.floor(baseSleeper * 6.0 * mult);
+    prices['CC'] = Math.floor(baseSleeper * 2.2 * mult);
+  }
+
+  // Ensure minimum realistic fares
+  for (let cls in prices) {
+    if (cls === 'SL' && prices[cls] < 120) prices[cls] = 120;
+    if (cls === '3AC' && prices[cls] < 450) prices[cls] = 450;
+    if (cls === '2AC' && prices[cls] < 700) prices[cls] = 700;
+    if (cls === '1AC' && prices[cls] < 1200) prices[cls] = 1200;
+    if (cls === 'CC' && prices[cls] < 350) prices[cls] = 350;
+    if (cls === 'EC' && prices[cls] < 700) prices[cls] = 700;
+  }
+
+  return prices;
+};
 
 export const getTrains = async (req, res) => {
   try {
     const { origin, destination, date, preferredClass } = req.query;
     
-    // Default RailPilot weights
-    const weights = {
-      duration: parseFloat(req.query.weightDuration) || 0.35,
-      daytime: parseFloat(req.query.weightDaytime) || 0.25,
-      budget: parseFloat(req.query.weightBudget) || 0.20,
-      reliability: parseFloat(req.query.weightReliability) || 0.10,
-      comfort: parseFloat(req.query.weightComfort) || 0.05,
-      food: parseFloat(req.query.weightFood) || 0.05
-    };
+    const originCodes = getStationCodes(origin);
+    const destCodes = getStationCodes(destination);
 
-    let filter = {};
-    if (origin) filter.departureStation = new RegExp(origin, 'i');
-    if (destination) filter.arrivalStation = new RegExp(destination, 'i');
-
-    let trains = [];
-    const o = origin?.toLowerCase() || '';
-    const d = destination?.toLowerCase() || '';
-
-    // NEW LIVE API FETCH PIPELINE
-    if (process.env.RAPIDAPI_KEY && CITY_TO_STATION[o] && CITY_TO_STATION[d]) {
-      const cacheKey = `${CITY_TO_STATION[o]}-${CITY_TO_STATION[d]}-${date || new Date().toISOString().split('T')[0]}`;
-      
-      try {
-        let rawLiveTrains = [];
-        
-        // 1. Check Cache
-        if (apiCache[cacheKey] && apiCache[cacheKey].timestamp > Date.now() - 15 * 60 * 1000) {
-          console.log(`\n⚡ Serving LIVE trains from Cache for ${cacheKey}...`);
-          rawLiveTrains = apiCache[cacheKey].data;
-        } else {
-          // 2. Fetch API
-          console.log(`\n📡 Fetching LIVE trains from IRCTC RapidAPI for ${CITY_TO_STATION[o]} -> ${CITY_TO_STATION[d]}...`);
-          const options = {
-            method: 'GET',
-            url: 'https://irctc1.p.rapidapi.com/api/v3/trainBetweenStations',
-            params: { 
-              fromStationCode: CITY_TO_STATION[o], 
-              toStationCode: CITY_TO_STATION[d],
-              dateOfJourney: date || new Date().toISOString().split('T')[0]
-            },
-            headers: {
-              'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-              'X-RapidAPI-Host': 'irctc1.p.rapidapi.com'
-            }
-          };
-          const response = await axios.request(options);
-          rawLiveTrains = response.data.data || [];
-          
-          // Save to cache
-          if (rawLiveTrains.length > 0) {
-            apiCache[cacheKey] = { data: rawLiveTrains, timestamp: Date.now() };
-          }
-        }
-        
-        trains = rawLiveTrains.map((t, idx) => {
-           let type = 'Express';
-           const tname = t.train_name.toLowerCase();
-           if (tname.includes('rajdhani')) type = 'Rajdhani';
-           else if (tname.includes('shatabdi')) type = 'Shatabdi';
-           else if (tname.includes('tejas')) type = 'Tejas';
-           else if (tname.includes('superfast') || tname.includes('sf')) type = 'Superfast';
-           else if (tname.includes('mail')) type = 'Mail';
-           
-           // True Dedicated Route Detection mathematically verified from API response
-           const isDedicated = (t.train_src === CITY_TO_STATION[o] && t.train_dstn === CITY_TO_STATION[d]);
-           
-           return {
-             _id: `live_${t.train_number}`,
-             trainNumber: t.train_number,
-             trainName: t.train_name,
-             departureStation: origin,
-             arrivalStation: destination,
-             departureTime: t.from_std,
-             arrivalTime: t.to_sta,
-             duration: t.duration,
-             prices: { SL: 450, '3AC': 1200, '2AC': 1800, '1AC': 3000, CC: 1000, EC: 2000 },
-             availableSeats: Math.floor(Math.random() * 200),
-             metrics: generateSmartMetrics(type, isDedicated),
-             isDedicatedRoute: isDedicated
-           };
-        });
-        if (trains.length > 0) console.log(`✅ Successfully loaded ${trains.length} live trains!`);
-      } catch (err) {
-        console.error("❌ Live API Fetch Failed (Rate limit or error). Falling back to mock generator...", err.message);
-      }
-    }
-
-    if (trains.length === 0) {
-      try {
-        trains = await Train.find(filter);
-      } catch (e) {
-        console.log("DB connection error, using in-memory mock data.");
-      }
-    }
-    
-    // In-memory fallback if DB is empty or disconnected or Live API failed
-    if (trains.length === 0) {
-
-      let fallbackTrains = [];
-
-      const o = origin?.toLowerCase() || '';
-      const d = destination?.toLowerCase() || '';
-
-      if (o.includes('delhi') && d.includes('lucknow')) {
-        fallbackTrains = [
-          { _id: '1', trainNumber: '12004', trainName: 'Swarna Shatabdi', departureStation: 'New Delhi', arrivalStation: 'Lucknow', departureTime: '06:10', arrivalTime: '12:55', duration: '6h 45m', prices: { CC: 965, EC: 1965 }, availableSeats: 45, metrics: generateSmartMetrics('Shatabdi', true), isDedicatedRoute: true },
-          { _id: '2', trainNumber: '12430', trainName: 'AC Superfast Exp', departureStation: 'New Delhi', arrivalStation: 'Lucknow', departureTime: '23:25', arrivalTime: '07:25', duration: '8h 00m', prices: { '3AC': 950, '2AC': 1350, '1AC': 2250 }, availableSeats: 12, metrics: generateSmartMetrics('Superfast', true), isDedicatedRoute: true },
-          { _id: '3', trainNumber: '12230', trainName: 'Lucknow Mail', departureStation: 'New Delhi', arrivalStation: 'Lucknow', departureTime: '22:00', arrivalTime: '06:40', duration: '8h 40m', prices: { SL: 335, '3AC': 890, '2AC': 1250, '1AC': 2100 }, availableSeats: 120, metrics: generateSmartMetrics('Mail', true), isDedicatedRoute: true },
-          { _id: '4', trainNumber: '12420', trainName: 'Gomti Express', departureStation: 'New Delhi', arrivalStation: 'Lucknow', departureTime: '12:20', arrivalTime: '21:30', duration: '9h 10m', prices: { '2S': 180, CC: 650, '1AC': 1600 }, availableSeats: 210, metrics: generateSmartMetrics('Express', true), isDedicatedRoute: true },
-          { _id: '5', trainNumber: '82502', trainName: 'Tejas Express', departureStation: 'New Delhi', arrivalStation: 'Lucknow', departureTime: '15:30', arrivalTime: '22:05', duration: '6h 35m', prices: { CC: 1250, EC: 2450 }, availableSeats: 65, metrics: generateSmartMetrics('Tejas', true), isDedicatedRoute: true },
-          { _id: '6', trainNumber: '14206', trainName: 'Ayodhya Express', departureStation: 'New Delhi', arrivalStation: 'Lucknow', departureTime: '18:20', arrivalTime: '03:30', duration: '9h 10m', prices: { SL: 315, '3AC': 850, '2AC': 1200, '1AC': 2000 }, availableSeats: 15, metrics: generateSmartMetrics('Express', false), isDedicatedRoute: false },
-          { _id: '7', trainNumber: '12556', trainName: 'Gorakhdham Exp', departureStation: 'New Delhi', arrivalStation: 'Lucknow', departureTime: '21:25', arrivalTime: '05:00', duration: '7h 35m', prices: { SL: 325, '3AC': 860, '2AC': 1220, '1AC': 2050 }, availableSeats: 5, metrics: generateSmartMetrics('Express', false), isDedicatedRoute: false },
-          { _id: '8', trainNumber: '12226', trainName: 'Kaifiyat Express', departureStation: 'New Delhi', arrivalStation: 'Lucknow', departureTime: '20:25', arrivalTime: '03:45', duration: '7h 20m', prices: { SL: 330, '3AC': 870, '2AC': 1230, '1AC': 2080 }, availableSeats: 48, metrics: generateSmartMetrics('Express', false), isDedicatedRoute: false }
-        ];
-      } else if (o.includes('lucknow') && d.includes('delhi')) {
-        fallbackTrains = [
-          { _id: '1', trainNumber: '12003', trainName: 'Swarna Shatabdi', departureStation: 'Lucknow', arrivalStation: 'New Delhi', departureTime: '15:30', arrivalTime: '22:25', duration: '6h 55m', prices: { CC: 965, EC: 1965 }, availableSeats: 45, metrics: generateSmartMetrics('Shatabdi', true), isDedicatedRoute: true },
-          { _id: '2', trainNumber: '12429', trainName: 'AC Superfast Exp', departureStation: 'Lucknow', arrivalStation: 'New Delhi', departureTime: '23:30', arrivalTime: '07:30', duration: '8h 00m', prices: { '3AC': 950, '2AC': 1350, '1AC': 2250 }, availableSeats: 12, metrics: generateSmartMetrics('Superfast', true), isDedicatedRoute: true },
-          { _id: '3', trainNumber: '12229', trainName: 'Lucknow Mail', departureStation: 'Lucknow', arrivalStation: 'New Delhi', departureTime: '22:00', arrivalTime: '06:55', duration: '8h 55m', prices: { SL: 335, '3AC': 890, '2AC': 1250, '1AC': 2100 }, availableSeats: 120, metrics: generateSmartMetrics('Mail', true), isDedicatedRoute: true },
-          { _id: '4', trainNumber: '82501', trainName: 'Tejas Express', departureStation: 'Lucknow', arrivalStation: 'New Delhi', departureTime: '06:10', arrivalTime: '12:25', duration: '6h 15m', prices: { CC: 1250, EC: 2450 }, availableSeats: 65, metrics: generateSmartMetrics('Tejas', true), isDedicatedRoute: true },
-          { _id: '5', trainNumber: '14205', trainName: 'Ayodhya Express', departureStation: 'Lucknow', arrivalStation: 'New Delhi', departureTime: '19:45', arrivalTime: '04:20', duration: '8h 35m', prices: { SL: 315, '3AC': 850, '2AC': 1200, '1AC': 2000 }, availableSeats: 15, metrics: generateSmartMetrics('Express', false), isDedicatedRoute: false },
-          { _id: '6', trainNumber: '12555', trainName: 'Gorakhdham Exp', departureStation: 'Lucknow', arrivalStation: 'New Delhi', departureTime: '21:35', arrivalTime: '05:30', duration: '7h 55m', prices: { SL: 325, '3AC': 860, '2AC': 1220, '1AC': 2050 }, availableSeats: 5, metrics: generateSmartMetrics('Express', false), isDedicatedRoute: false }
-        ];
-      } else {
-        // Dynamic Generator for ANY other route!
-        for (let i = 1; i <= 6; i++) {
-          const types = ['Express', 'Superfast', 'Shatabdi', 'Mail'];
-          const type = types[Math.floor(Math.random() * types.length)];
-          const depH = Math.floor(Math.random() * 24);
-          const durH = Math.floor(Math.random() * 12) + 4;
-          const arrH = (depH + durH) % 24;
-          
-          fallbackTrains.push({
-            _id: `${i}`, trainNumber: `${10000 + Math.floor(Math.random() * 90000)}`,
-            trainName: `${origin || 'City A'} - ${destination || 'City B'} ${type}`,
-            departureStation: origin || 'City A', arrivalStation: destination || 'City B',
-            departureTime: `${depH.toString().padStart(2, '0')}:15`,
-            arrivalTime: `${arrH.toString().padStart(2, '0')}:45`,
-            duration: `${durH}h 30m`, prices: { SL: 400, '3AC': 1100, '2AC': 1600 },
-            availableSeats: Math.floor(Math.random() * 100),
-            metrics: generateSmartMetrics(type, i % 3 === 0), isDedicatedRoute: i % 3 === 0
-          });
-        }
-      }
-      trains = fallbackTrains;
-    }
-
-    // Step 1: Extract, filter, and compute base metrics for normalization
-    let rawTrains = trains
-      .map(t => {
-        const trainObj = typeof t.toObject === 'function' ? t.toObject() : t;
-        
-        // Filter by preferred class if it's set
-        if (preferredClass && preferredClass !== 'All' && !trainObj.prices[preferredClass]) {
-          return null;
-        }
-
-        // Determine which price to use for the "Budget Score" comparison
-        let budgetPrice = 0;
-        if (preferredClass && preferredClass !== 'All') {
-          budgetPrice = trainObj.prices[preferredClass];
-        } else {
-          // If no specific class is preferred, use a standard baseline for fair budget comparison
-          const baselineOrder = ['3AC', 'CC', 'SL', '2S', '2AC', '1AC', 'EC'];
-          for (const cls of baselineOrder) {
-            if (trainObj.prices[cls]) {
-              budgetPrice = trainObj.prices[cls];
-              break;
-            }
-          }
-        }
-
-        const durMins = parseDuration(trainObj.duration);
-        const daytime = calculateDaytimeHours(trainObj.departureTime, trainObj.arrivalTime, durMins);
-        
-        return {
-          ...trainObj,
-          durMins,
-          daytime,
-          budgetPrice
-        };
-      })
-      .filter(t => t !== null); // Remove trains that didn't match the preferred class
-
-    if (rawTrains.length === 0) {
+    if (originCodes.length === 0 || destCodes.length === 0) {
       return res.json([]);
     }
 
-    const minDur = Math.min(...rawTrains.map(t => t.durMins));
-    const maxDur = Math.max(...rawTrains.map(t => t.durMins));
-    
-    const minDaytime = Math.min(...rawTrains.map(t => t.daytime));
-    const maxDaytime = Math.max(...rawTrains.map(t => t.daytime));
-    
-    const minPrice = Math.min(...rawTrains.map(t => t.budgetPrice));
-    const maxPrice = Math.max(...rawTrains.map(t => t.budgetPrice));
+    // Create a unique set of train numbers that pass through at least one origin code
+    const candidateTrains = new Set();
+    for (const oCode of originCodes) {
+      const trains = stationToTrains[oCode];
+      if (trains) {
+        for (const t of trains) {
+          candidateTrains.add(t);
+        }
+      }
+    }
 
-    // Step 2: Normalize and Score (0-100)
-    let scoredTrains = rawTrains.map(t => {
-      const durationScore = maxDur === minDur ? 100 : 100 - (((t.durMins - minDur) / (maxDur - minDur)) * 100);
-      const daytimeScore = maxDaytime === minDaytime ? 100 : 100 - (((t.daytime - minDaytime) / (maxDaytime - minDaytime)) * 100);
-      const budgetScore = maxPrice === minPrice ? 100 : 100 - (((t.budgetPrice - minPrice) / (maxPrice - minPrice)) * 100);
+    let results = [];
+
+    // Iterate through the candidates and check for valid pairings
+    for (const tNum of candidateTrains) {
+      const schedule = schedulesByTrain[tNum];
+      if (!schedule) continue;
+
+      // Find all indices of origin and destination codes for this train
+      const oIndices = [];
+      const dIndices = [];
       
-      const reliabilityScore = t.metrics.reliabilityRating * 10;
-      const comfortScore = t.metrics.comfortRating * 10;
-      
-      let foodScore = 0;
-      let hasPantry = true;
-      
-      const [depH] = t.departureTime.split(':').map(Number);
-      const [arrH2] = t.arrivalTime.split(':').map(Number);
-      
-      // If departs >= 10 PM and arrives <= 10 AM, pantry is not needed
-      const isOvernightNoFoodNeeded = (depH >= 22 || depH < 4) && (arrH2 <= 10);
-      
-      if (isOvernightNoFoodNeeded) {
-        hasPantry = false;
-        foodScore = 100; // Perfect score because the lack of food doesn't inconvenience the user
-      } else if (t.metrics?.foodRating) {
-        foodScore = t.metrics.foodRating * 10;
+      schedule.forEach((s, idx) => {
+        if (originCodes.includes(s.station_code)) oIndices.push({ idx, code: s.station_code });
+        if (destCodes.includes(s.station_code)) dIndices.push({ idx, code: s.station_code });
+      });
+
+      if (oIndices.length === 0 || dIndices.length === 0) continue;
+
+      // Find a valid pair where origin comes before destination
+      let bestPair = null;
+      for (const o of oIndices) {
+        for (const d of dIndices) {
+          if (o.idx < d.idx) {
+            if (!bestPair || (d.idx - o.idx < bestPair.d.idx - bestPair.o.idx)) {
+              // Pick the one with shortest path between nodes if a train hits multiple stations in the city
+              bestPair = { o, d };
+            }
+          }
+        }
       }
 
-      // Ensure sum of weights is mathematically correct just in case
-      const totalWeight = weights.duration + weights.daytime + weights.budget + weights.reliability + weights.comfort + weights.food;
-      
-      let finalScore = 
-        (durationScore * (weights.duration / totalWeight)) +
-        (daytimeScore * (weights.daytime / totalWeight)) +
-        (budgetScore * (weights.budget / totalWeight)) +
-        (reliabilityScore * (weights.reliability / totalWeight)) +
-        (comfortScore * (weights.comfort / totalWeight)) +
-        (foodScore * (weights.food / totalWeight));
+      if (bestPair) {
+        const oStop = schedule[bestPair.o.idx];
+        const dStop = schedule[bestPair.d.idx];
+        const actualOriginCode = bestPair.o.code;
+        const actualDestCode = bestPair.d.code;
+        const trainDetails = trainsMap[tNum];
 
-      // Unorthodox Arrival Check (1 AM to 6 AM)
-      const [arrH] = t.arrivalTime.split(':').map(Number);
-      const isUnorthodox = arrH >= 1 && arrH < 6;
-      
-      if (isUnorthodox) {
-        finalScore -= 15; // 15 point penalty for bad arrival time
+        // Some stops have 'None' for departure if they are terminating, etc.
+        const depTime = oStop.departure !== 'None' ? oStop.departure : oStop.arrival;
+        const arrTime = dStop.arrival !== 'None' ? dStop.arrival : dStop.departure;
+
+        if (!depTime || !arrTime || depTime === 'None' || arrTime === 'None') continue;
+
+        const durMins = calculateDurationMins(oStop.day, depTime, dStop.day, arrTime);
+        const daytime = calculateDaytimeHours(oStop.day, depTime, dStop.day, arrTime);
+
+        // Determine type based on name or fallback
+        let trainType = trainDetails?.type || 'Express';
+        if (trainDetails?.name) {
+          const tname = trainDetails.name.toLowerCase();
+          if (tname.includes('vande bharat')) trainType = 'Vande Bharat';
+          else if (tname.includes('rajdhani')) trainType = 'Rajdhani';
+          else if (tname.includes('shatabdi')) trainType = 'Shatabdi';
+          else if (tname.includes('tejas')) trainType = 'Tejas';
+          else if (tname.includes('sf') || tname.includes('superfast')) trainType = 'Superfast';
+          else if (tname.includes('mail')) trainType = 'Mail';
+        }
+
+        results.push({
+          _id: tNum,
+          trainNumber: tNum,
+          trainName: trainDetails?.name || oStop.train_name,
+          departureStation: stationsMap[actualOriginCode]?.name || actualOriginCode,
+          arrivalStation: stationsMap[actualDestCode]?.name || actualDestCode,
+          departureTime: depTime.substring(0, 5), // "12:30"
+          arrivalTime: arrTime.substring(0, 5),
+          durMins,
+          daytime,
+          duration: formatDuration(durMins),
+          type: trainType,
+          prices: getDummyPrices(durMins, trainType),
+          availableSeats: Math.floor(Math.random() * 200) + 10,
+          isDedicatedRoute: (bestPair.o.idx === 0 && bestPair.d.idx === schedule.length - 1)
+        });
       }
+    }
 
-      // Dedicated Route Bonus (Originating & Terminating matches)
-      if (t.isDedicatedRoute) {
-        finalScore += 18; // 18 point bonus for dedicated end-to-end routes
-      }
+    // Rank the results
+    const rankedTrains = rankTrains(results, req.query, preferredClass);
 
-      // Long-Haul Dynamic Modifier (> 16 hours)
-      const isLongHaul = t.durMins > 16 * 60;
-      if (isLongHaul) {
-        // Boost score based on Comfort (makes comfort heavily outweigh duration penalty)
-        finalScore += (comfortScore * 0.15);
-      }
-
-      // Determine match reason
-      let matchReason = "Solid all-around option";
-      if (t.isDedicatedRoute && finalScore > 85) matchReason = "Dedicated End-to-End Route";
-      else if (isLongHaul && comfortScore >= 80) matchReason = "Premium Long-Haul Experience";
-      else if (durationScore > 90 && weights.duration > 0.2) matchReason = "Fastest route available";
-      else if (daytimeScore > 90 && weights.daytime > 0.15) matchReason = "Saves your daytime hours";
-      else if (budgetScore > 90 && weights.budget > 0.15) matchReason = `Best value for money (${preferredClass && preferredClass !== 'All' ? preferredClass : 'Standard'})`;
-      else if (finalScore > 85) matchReason = "Top RailPilot Recommendation";
-
-      return {
-        ...t,
-        aiScore: Math.max(0, Math.round(finalScore)),
-        matchReason,
-        isUnorthodox,
-        hasPantry
-      };
-    });
-
-    // Step 3: Rank
-    scoredTrains.sort((a, b) => b.aiScore - a.aiScore);
-
-    res.json(scoredTrains);
+    res.json(rankedTrains);
   } catch (error) {
     console.error("Error fetching trains:", error);
     res.status(500).json({ message: 'Server error fetching trains' });
@@ -381,11 +214,13 @@ export const getTrains = async (req, res) => {
 
 export const getTrainById = async (req, res) => {
   try {
-    const train = await Train.findById(req.params.id);
+    const tNum = req.params.id;
+    const train = trainsMap[tNum];
+    const schedule = schedulesByTrain[tNum];
     if (!train) {
       return res.status(404).json({ message: 'Train not found' });
     }
-    res.json(train);
+    res.json({ ...train, schedule });
   } catch (error) {
     console.error("Error fetching train by id:", error);
     res.status(500).json({ message: 'Server error fetching train' });

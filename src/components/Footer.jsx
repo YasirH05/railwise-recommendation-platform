@@ -14,7 +14,7 @@ export default function Footer() {
             <span>RAIL COMPASS</span>
           </Link>
           <p className="footer-description text-muted">
-            India's premier AI-powered railway discovery platform.<br />
+            India's premier personalized railway discovery platform.<br />
             Mastering your journey with precise routing, smart budget tracking, and premium travel insights.
           </p>
           <div className="social-icons">
