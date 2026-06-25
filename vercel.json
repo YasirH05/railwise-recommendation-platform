@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/server.js": {
+      "includeFiles": "backend/data/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",
