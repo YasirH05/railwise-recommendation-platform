@@ -6,18 +6,6 @@ import zlib from 'zlib';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DATA_DIR = path.join(__dirname, '../data');
-
-// Helper to load either .json or .json.gz
-const loadJSONFile = (filename) => {
-  const gzPath = path.join(DATA_DIR, filename + '.gz');
-  if (fs.existsSync(gzPath)) {
-    return JSON.parse(zlib.gunzipSync(fs.readFileSync(gzPath)).toString('utf8'));
-  }
-  const jsonPath = path.join(DATA_DIR, filename);
-  return JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-};
-
 // In-memory indices
 export let stationsList = [];
 export let stationsMap = {}; // code -> { code, name }
@@ -32,7 +20,8 @@ export const initData = () => {
   console.log('⏳ Loading Railway Data into Memory... This might take a few seconds.');
   try {
     // 1. Load Stations
-    const stationsData = loadJSONFile('stations.json');
+    const stationsPath = path.join(__dirname, '../data/stations.json');
+    const stationsData = JSON.parse(fs.readFileSync(stationsPath, 'utf8'));
     stationsData.features.forEach(f => {
       const props = f.properties;
       if (props.code) {
@@ -45,7 +34,8 @@ export const initData = () => {
     console.log(`✅ Loaded ${stationsList.length} stations.`);
 
     // 2. Load Trains
-    const trainsData = loadJSONFile('trains.json');
+    const trainsPath = path.join(__dirname, '../data/trains.json.gz');
+    const trainsData = JSON.parse(zlib.gunzipSync(fs.readFileSync(trainsPath)).toString('utf8'));
     trainsData.features.forEach(f => {
       const props = f.properties;
       if (props.number) {
@@ -55,7 +45,8 @@ export const initData = () => {
     console.log(`✅ Loaded ${Object.keys(trainsMap).length} trains.`);
 
     // 3. Load Schedules
-    const schedulesData = loadJSONFile('schedules.json');
+    const schedulesPath = path.join(__dirname, '../data/schedules.json.gz');
+    const schedulesData = JSON.parse(zlib.gunzipSync(fs.readFileSync(schedulesPath)).toString('utf8'));
     
     // Group schedules by train number
     schedulesData.forEach(stop => {
