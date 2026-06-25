@@ -23,7 +23,7 @@ export default function Home() {
   };
   return (
     <div className="home-container animate-fade-in" style={{ display: 'block' }}>
-      <div className="hero-section" style={{ margin: '0 auto', paddingTop: '100px', paddingBottom: '100px', minHeight: '60vh', display: 'flex', alignItems: 'center' }}>
+      <div className="hero-section" style={{ margin: '0 auto', paddingTop: '100px', paddingBottom: '100px', minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div className="hero-content">
           <div className="badge">✨ AI-Powered Recommendations</div>
           <h1>
