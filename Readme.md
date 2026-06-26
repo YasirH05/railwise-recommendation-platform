@@ -13,7 +13,7 @@
 -  **Top Recommendations**: Get clear, ranked train options so you always book the perfect ticket.
 -  **Responsive UI**: A modern, glassmorphism-inspired UI designed for an optimal user experience across devices.
 
-# 🛠️ Tech Stack
+# Tech Stack
 
 ### Frontend
 - **React 19**
@@ -27,7 +27,7 @@
 - **MongoDB** with **Mongoose**
 - Data ingestion and seeding scripts (for Kaggle dataset)
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - Node.js (v18 or higher)
@@ -71,7 +71,7 @@ cd "Railway Recommendation System"
    ```
 4. Open your browser and navigate to the URL provided by Vite (usually `http://localhost:5173`).
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 Railway Recommendation System/
@@ -92,10 +92,10 @@ Railway Recommendation System/
 └── vite.config.js            # Vite configuration
 ```
 
-## 🤝 Contributing
+## Contributing
 
 Contributions, issues, and feature requests are welcome! Feel free to check the issues page if you want to contribute.
 
-## 📝 License
+## License
 
 This project is licensed under the ISC License.
