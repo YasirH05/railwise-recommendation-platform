@@ -2,16 +2,16 @@
  Link to the Website: https://railcompass.vercel.app/
  
  
- 🚂 Rail Compass (Railway Recommendation System)
+ Rail Compass (Railway Recommendation System)
 
 **Rail Compass** is a smart and personalized railway recommendation system designed to help you find the perfect train for your journey. It analyzes duration, daytime efficiency, budget, and reliability to recommend the best options tailored specifically to your needs.
 
-## ✨ Features
+## Features
 
-- 🗺️ **Smart Search**: Enter your journey details to instantly scan thousands of routes across India.
-- 🧠 **Smart Analysis**: Our algorithm weighs multiple factors including duration, budget, comfort, and reliability based on your unique preferences.
-- 🏆 **Top Recommendations**: Get clear, ranked train options so you always book the perfect ticket.
-- 📱 **Responsive UI**: A modern, glassmorphism-inspired UI designed for an optimal user experience across devices.
+-  **Smart Search**: Enter your journey details to instantly scan thousands of routes across India.
+-  **Smart Analysis**: Our algorithm weighs multiple factors including duration, budget, comfort, and reliability based on your unique preferences.
+-  **Top Recommendations**: Get clear, ranked train options so you always book the perfect ticket.
+-  **Responsive UI**: A modern, glassmorphism-inspired UI designed for an optimal user experience across devices.
 
 # 🛠️ Tech Stack
 
